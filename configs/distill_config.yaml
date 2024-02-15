@@ -1,0 +1,27 @@
+teacher:
+  model: microsoft/Phi-3-mini-4k-instruct
+  quantize: int4
+
+student:
+  layers: 12
+  hidden_dim: 1024
+  attention_heads: 8
+  vocab_size: 32064
+
+distillation:
+  temperature: 4.0
+  alpha: 0.7
+  dataset: tatsu-lab/alpaca
+  max_samples: 52000
+  batch_size: 8
+  steps: 10000
+  checkpoint_every: 500
+  lr: 3.0e-4
+
+quantization:
+  bits: 4
+  group_size: 64
+
+export:
+  target: CoreML
+  compute_units: CPU_AND_NE
