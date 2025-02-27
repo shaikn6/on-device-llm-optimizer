@@ -89,13 +89,13 @@ class DistillationTrainer:
     def _save_checkpoint(self, step: int) -> None:
         path = self.checkpoint_dir / f"step_{step:06d}"
         path.mkdir(exist_ok=True)
-        mx_utils.save_weights(str(path / "weights.npz"), dict(self.student.parameters()))
+        flat_weights = dict(mx_utils.tree_flatten(self.student.parameters()))
+        mx.savez(str(path / "weights.npz"), **flat_weights)
         print(f"  Checkpoint saved → {path}")
 
     def _save_final(self) -> None:
-        mx_utils.save_weights(
-            str(self.output_dir / "weights.npz"), dict(self.student.parameters())
-        )
+        flat_weights = dict(mx_utils.tree_flatten(self.student.parameters()))
+        mx.savez(str(self.output_dir / "weights.npz"), **flat_weights)
         config_path = self.output_dir / "config.json"
         config_path.write_text(json.dumps(self.student.cfg.__dict__, indent=2))
         print(f"Final model saved → {self.output_dir}")
