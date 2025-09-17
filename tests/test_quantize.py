@@ -4,7 +4,6 @@ from pathlib import Path
 
 import mlx.core as mx
 import mlx.utils as mx_utils
-import pytest
 
 from src.model.config import StudentConfig
 from src.model.student import StudentModel

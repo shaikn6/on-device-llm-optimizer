@@ -17,7 +17,6 @@ import shutil
 from pathlib import Path
 
 import mlx.core as mx
-import mlx.utils as mx_utils
 
 
 def quantize_int4(
