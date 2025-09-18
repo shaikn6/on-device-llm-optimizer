@@ -1,3 +1,6 @@
+> **Private Repository** — Source code available on request for verified employers.
+> Contact: shaikn6@udayton.edu
+
 # On-Device LLM Optimizer
 
 Knowledge distillation pipeline: Phi-3 Mini 3.8B → 236M student model on Apple Silicon (MLX).
