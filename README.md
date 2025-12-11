@@ -1,6 +1,3 @@
-> **Private Repository** — Source code available on request for verified employers.
-> Contact: nagizaazs@gmail.com
-
 # On-Device LLM Optimizer
 
 Knowledge distillation pipeline: Phi-3 Mini 3.8B → 236M student model on Apple Silicon (MLX).
