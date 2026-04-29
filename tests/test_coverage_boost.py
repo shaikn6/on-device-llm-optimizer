@@ -5,10 +5,6 @@ from __future__ import annotations
 
 import json
 import math
-import time
-import threading
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import mlx.core as mx
 import mlx.utils as mx_utils
@@ -56,18 +52,15 @@ class TestStudentConfig:
         cfg = StudentConfig(hidden_dim=64, ff_multiplier=8)
         assert cfg.ff_dim == 512
 
-
 # ── StudentModel components ───────────────────────────────────────────────────
 
 from src.model.student import StudentModel, MultiHeadAttention, FeedForward, TransformerBlock
-
 
 @pytest.fixture
 def tiny_cfg():
     return StudentConfig(
         num_layers=2, hidden_dim=64, num_heads=4, vocab_size=256, max_seq_len=32
     )
-
 
 class TestMultiHeadAttention:
     def test_output_shape(self, tiny_cfg):
@@ -95,7 +88,6 @@ class TestMultiHeadAttention:
         assert not mx.any(mx.isnan(out)).item()
         assert not mx.any(mx.isinf(out)).item()
 
-
 class TestFeedForward:
     def test_output_shape(self, tiny_cfg):
         ff = FeedForward(tiny_cfg)
@@ -110,7 +102,6 @@ class TestFeedForward:
         x = mx.array(rng.normal(size=(1, 4, tiny_cfg.hidden_dim)).astype(np.float32))
         out = ff(x)
         assert not mx.any(mx.isnan(out)).item()
-
 
 class TestTransformerBlock:
     def test_output_shape(self, tiny_cfg):
@@ -128,7 +119,6 @@ class TestTransformerBlock:
         out = block(x)
         # Not identical (residual connection modifies it)
         assert not mx.all(out == x).item()
-
 
 class TestStudentModelAdditional:
     def test_single_token_forward(self, tiny_cfg):
@@ -166,11 +156,9 @@ class TestStudentModelAdditional:
         lm_head_keys = [k for k in flat if "lm_head" in k]
         assert len(lm_head_keys) == 0, "No separate lm_head weight expected (weight-tied)"
 
-
 # ── kd_loss additional coverage ───────────────────────────────────────────────
 
 from src.distillation.losses import kd_loss
-
 
 class TestKdLossAdditional:
     def test_mid_alpha(self):
@@ -206,11 +194,9 @@ class TestKdLossAdditional:
         loss = kd_loss(logits_s, logits_t, labels, temperature=3.0, alpha=0.8)
         assert float(loss) >= 0.0
 
-
 # ── memory.py ─────────────────────────────────────────────────────────────────
 
 from src.optimization.memory import peak_ram_mb, _RamTracker
-
 
 class TestPeakRamMb:
     def test_peak_mb_positive(self):
@@ -244,11 +230,9 @@ class TestPeakRamMb:
         tracker.stop()
         assert not tracker._running
 
-
 # ── dataset.py ────────────────────────────────────────────────────────────────
 
 from src.distillation.dataset import batch_iter, _format_example
-
 
 class TestFormatExample:
     def test_format_includes_instruction(self):
@@ -273,7 +257,6 @@ class TestFormatExample:
         result = _format_example(row)
         assert isinstance(result, str)
         assert "Do something" in result
-
 
 class TestBatchIter:
     def _make_token_lists(self, n: int = 20, seq_len: int = 10) -> list[list[int]]:
@@ -339,12 +322,10 @@ class TestBatchIter:
         # batch_size=5 > n_examples=1 → no complete batch
         assert len(batches) == 0
 
-
 # ── perplexity.py ─────────────────────────────────────────────────────────────
 
 from src.evaluation.perplexity import compute_perplexity
 from src.model.student import StudentModel
-
 
 class _MockTokenizer:
     """Minimal tokenizer mock for perplexity tests."""
@@ -352,14 +333,12 @@ class _MockTokenizer:
         tokens = [ord(c) % 256 for c in text[:max_length or len(text)]]
         return tokens
 
-
 @pytest.fixture
 def tiny_model_for_ppl():
     cfg = StudentConfig(
         num_layers=1, hidden_dim=32, num_heads=4, vocab_size=256, max_seq_len=32
     )
     return StudentModel(cfg)
-
 
 class TestPerplexity:
     def test_returns_positive_float(self, tiny_model_for_ppl):
@@ -396,11 +375,9 @@ class TestPerplexity:
         assert isinstance(ppl, float)
         assert not math.isinf(ppl)
 
-
 # ── quantize.py additional coverage ──────────────────────────────────────────
 
 from src.optimization.quantize import quantize_int4
-
 
 class TestQuantizeAdditional:
     def _make_model_dir(self, tmp_path, group_size=64):
