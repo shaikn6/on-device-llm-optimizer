@@ -1,5 +1,7 @@
 # On-Device LLM Optimizer
 
+![Build](https://img.shields.io/github/actions/workflow/status/shaikn6/on-device-llm-optimizer/ci.yml?style=flat-square&label=build) ![Stars](https://img.shields.io/github/stars/shaikn6/on-device-llm-optimizer?style=flat-square) ![Last Commit](https://img.shields.io/github/last-commit/shaikn6/on-device-llm-optimizer?style=flat-square) ![License](https://img.shields.io/github/license/shaikn6/on-device-llm-optimizer?style=flat-square) ![Top Language](https://img.shields.io/github/languages/top/shaikn6/on-device-llm-optimizer?style=flat-square) ![Issues](https://img.shields.io/github/issues/shaikn6/on-device-llm-optimizer?style=flat-square) ![Repo Size](https://img.shields.io/github/repo-size/shaikn6/on-device-llm-optimizer?style=flat-square)
+
 **Knowledge-distill a 3.8B teacher into a ~236M student, INT4-quantize it, and export to CoreML for the iPhone Neural Engine — entirely on Apple Silicon (MLX).**
 
 Phi-3 Mini 3.8B (frozen, INT4 teacher) → custom 236M MLX student → group-wise INT4 →
