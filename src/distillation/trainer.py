@@ -76,7 +76,7 @@ class DistillationTrainer:
 
         self.optimizer = optim.AdamW(learning_rate=self.lr)
 
-    def _loss_fn(self, student: StudentModel, tokens: mx.array) -> mx.array:
+    def _loss_fn(self, student: StudentModel, tokens: mx.array, mask: mx.array) -> mx.array:
         """Compute KD loss for one batch. Called by mx.value_and_grad."""
         logits_s = student(tokens)                            # [B, S, V]
         with mx.no_grad():
@@ -84,7 +84,8 @@ class DistillationTrainer:
         labels = tokens[:, 1:]                                # next-token labels
         logits_s = logits_s[:, :-1, :]                       # align
         logits_t = logits_t[:, :-1, :]
-        return kd_loss(logits_s, logits_t, labels, self.temperature, self.alpha)
+        label_mask = mask[:, 1:]                              # align with shifted labels
+        return kd_loss(logits_s, logits_t, labels, self.temperature, self.alpha, mask=label_mask)
 
     def _save_checkpoint(self, step: int) -> None:
         path = self.checkpoint_dir / f"step_{step:06d}"
@@ -115,8 +116,8 @@ class DistillationTrainer:
         start_time = time.time()
 
         while step < self.steps:
-            for batch in batch_iter(train_tokens, self.batch_size, self.max_seq_len):
-                loss, grads = loss_and_grad(self.student, batch)
+            for tokens, mask in batch_iter(train_tokens, self.batch_size, self.max_seq_len):
+                loss, grads = loss_and_grad(self.student, tokens, mask)
                 self.optimizer.update(self.student, grads)
                 mx.eval(self.student.parameters(), self.optimizer.state)
 

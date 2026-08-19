@@ -75,8 +75,8 @@ def batch_iter(
     pad_id: int = 0,
     shuffle: bool = True,
     seed: int = 0,
-) -> Iterator[mx.array]:
-    """Yield batches of padded token arrays.
+) -> Iterator[tuple[mx.array, mx.array]]:
+    """Yield batches of padded token arrays with a real-token mask.
 
     Args:
         token_lists: List of token-id lists from load_alpaca().
@@ -87,7 +87,11 @@ def batch_iter(
         seed: Random seed for shuffling.
 
     Yields:
-        mx.array of shape [batch_size, max_seq_len], dtype int32.
+        (tokens, mask): tokens is mx.array of shape [batch_size, max_seq_len],
+        dtype int32. mask is mx.array of the same shape, dtype float32, with
+        1.0 at positions that hold a real (pre-padding) token and 0.0 at
+        padded positions — derived from each example's true length, not from
+        comparing against pad_id (which may collide with a real token id).
     """
     rng = random.Random(seed)
     indices = list(range(len(token_lists)))
@@ -97,8 +101,11 @@ def batch_iter(
     for start in range(0, len(indices) - batch_size + 1, batch_size):
         batch_ids = indices[start : start + batch_size]
         batch = []
+        mask = []
         for idx in batch_ids:
             toks = token_lists[idx][:max_seq_len]
-            padded = toks + [pad_id] * (max_seq_len - len(toks))
+            n = len(toks)
+            padded = toks + [pad_id] * (max_seq_len - n)
             batch.append(padded)
-        yield mx.array(batch, dtype=mx.int32)
+            mask.append([1.0] * n + [0.0] * (max_seq_len - n))
+        yield mx.array(batch, dtype=mx.int32), mx.array(mask, dtype=mx.float32)
