@@ -1,4 +1,4 @@
-"""Tests for the custom 1B student transformer."""
+"""Tests for the custom 236M student transformer."""
 import pytest
 import mlx.core as mx
 import mlx.utils as mx_utils
@@ -14,7 +14,7 @@ def count_params(model) -> int:
 
 @pytest.fixture
 def tiny_config() -> StudentConfig:
-    """Minimal config for fast tests — not full 1B size."""
+    """Minimal config for fast tests — not full 236M size."""
     return StudentConfig(
         num_layers=2,
         hidden_dim=64,
@@ -45,13 +45,8 @@ def test_parameter_count_scales_with_config():
     assert count_params(large_model) > count_params(small_model)
 
 
-def test_full_config_approx_1b_params():
-    """Full 12L×1024d×8h config must have between 200M and 300M parameters.
-
-    Note: The 12L×1024d architecture yields ~236M params. The "1B" label in the
-    project refers to the target class (sub-1B on-device models); the actual count
-    for this config is ~236M, which fits the on-device constraint.
-    """
+def test_full_config_approx_236m_params():
+    """Full 12L×1024d×8h config must have between 200M and 300M parameters."""
     cfg = StudentConfig(
         num_layers=12,
         hidden_dim=1024,
