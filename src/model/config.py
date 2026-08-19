@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class StudentConfig:
     """All architectural hyperparameters for the student model.
 
-    Default values reproduce the ~1B parameter target from the design spec.
+    Default values reproduce the ~236M parameter target from the design spec.
     """
     num_layers: int = 12
     hidden_dim: int = 1024

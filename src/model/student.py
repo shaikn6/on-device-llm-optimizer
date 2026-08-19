@@ -1,4 +1,4 @@
-"""Custom 1B student transformer built in MLX nn.Module.
+"""Custom 236M student transformer built in MLX nn.Module.
 
 Architecture:
   token_embed (vocab_size → hidden_dim)
