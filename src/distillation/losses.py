@@ -17,6 +17,7 @@ def kd_loss(
     labels: mx.array,
     temperature: float,
     alpha: float,
+    mask: mx.array | None = None,
 ) -> mx.array:
     """Compute the knowledge distillation training loss.
 
@@ -27,6 +28,10 @@ def kd_loss(
         temperature: Softening temperature T > 1 softens distributions.
         alpha: Weight for soft (KL) loss; (1-alpha) weights hard (CE) loss.
                alpha=1.0 → pure KL; alpha=0.0 → pure CE.
+        mask: Optional real-token mask, shape [batch, seq_len], float32, with
+              1.0 for real tokens and 0.0 for padding. When given, padded
+              positions are excluded from both loss terms instead of being
+              averaged in as if they were real supervision targets.
 
     Returns:
         Scalar loss value (0-d array).
@@ -40,12 +45,20 @@ def kd_loss(
     log_s = mx.log(s_soft + 1e-8)
     log_t = mx.log(t_soft + 1e-8)
     kl = mx.sum(s_soft * (log_s - log_t), axis=-1)                # [B, S]
-    soft_loss = mx.mean(kl) * (temperature ** 2)                  # scale by T²
 
     # --- Hard loss: cross-entropy against ground-truth labels ---
     logits_flat = logits_s.reshape(-1, vocab_size)                 # [B*S, V]
     labels_flat = labels.reshape(-1)                               # [B*S]
     log_probs = logits_flat - mx.logsumexp(logits_flat, axis=-1, keepdims=True)
-    hard_loss = -mx.mean(log_probs[mx.arange(labels_flat.shape[0]), labels_flat])
+    ce = -log_probs[mx.arange(labels_flat.shape[0]), labels_flat]  # [B*S]
+
+    if mask is not None:
+        mask_flat = mask.reshape(-1)
+        denom = mx.maximum(mx.sum(mask), 1e-8)
+        soft_loss = mx.sum(kl * mask) / denom * (temperature ** 2)
+        hard_loss = mx.sum(ce * mask_flat) / denom
+    else:
+        soft_loss = mx.mean(kl) * (temperature ** 2)
+        hard_loss = mx.mean(ce)
 
     return alpha * soft_loss + (1.0 - alpha) * hard_loss

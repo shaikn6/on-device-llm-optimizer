@@ -267,39 +267,51 @@ class TestBatchIter:
         tokens = self._make_token_lists(20, 10)
         batches = list(batch_iter(tokens, batch_size=4, max_seq_len=8))
         assert len(batches) > 0
-        for batch in batches:
+        for batch, mask in batches:
             assert batch.shape[0] == 4
             assert batch.shape[1] == 8
+            assert mask.shape == batch.shape
 
     def test_padding_fills_short_sequences(self):
         tokens = [[1, 2, 3], [4, 5, 6, 7, 8, 9, 10, 11]]
         batches = list(batch_iter(tokens, batch_size=2, max_seq_len=8, shuffle=False))
         if batches:
-            batch = batches[0]
+            batch, mask = batches[0]
             assert batch.shape == (2, 8)
+            assert mask.shape == (2, 8)
 
     def test_truncation_enforced(self):
         tokens = [list(range(20))]  # 20 tokens
         tokens = tokens * 4  # 4 examples
         batches = list(batch_iter(tokens, batch_size=4, max_seq_len=8, shuffle=False))
         if batches:
-            assert batches[0].shape[1] == 8  # truncated to 8
+            assert batches[0][0].shape[1] == 8  # truncated to 8
 
     def test_no_shuffle(self):
         tokens = self._make_token_lists(10, 5)
         batches1 = list(batch_iter(tokens, batch_size=2, max_seq_len=5, shuffle=False))
         batches2 = list(batch_iter(tokens, batch_size=2, max_seq_len=5, shuffle=False))
         # With shuffle=False, results should be identical
-        for b1, b2 in zip(batches1, batches2):
+        for (b1, m1), (b2, m2) in zip(batches1, batches2):
             assert mx.all(b1 == b2).item()
+            assert mx.all(m1 == m2).item()
 
     def test_custom_pad_id(self):
         tokens = [[1, 2]]  # only 2 tokens
         batches = list(batch_iter(tokens * 4, batch_size=4, max_seq_len=6, pad_id=99, shuffle=False))
         if batches:
-            batch = np.array(batches[0].tolist())
+            batch = np.array(batches[0][0].tolist())
             # Positions 2..5 should be 99
             assert all(batch[0, 2:] == 99)
+
+    def test_mask_marks_real_tokens_by_length_not_pad_id(self):
+        # A real token happens to equal pad_id (0) — the mask must still be
+        # derived from the true pre-padding length, not from "token == pad_id".
+        tokens = [[5, 0, 7]]  # length 3, includes a real "0" token
+        batches = list(batch_iter(tokens * 4, batch_size=4, max_seq_len=6, pad_id=0, shuffle=False))
+        batch, mask = batches[0]
+        mask_row = np.array(mask.tolist())[0]
+        assert mask_row.tolist() == [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
 
     def test_shuffled_batches_vary(self):
         tokens = self._make_token_lists(20, 5)
@@ -310,7 +322,7 @@ class TestBatchIter:
         if batches1 and batches2:
             any_different = any(
                 not mx.all(b1 == b2).item()
-                for b1, b2 in zip(batches1, batches2)
+                for (b1, _), (b2, _) in zip(batches1, batches2)
             )
             # This is a probabilistic test; may rarely pass with identical first batches
             # Just verify it runs without error
