@@ -4,9 +4,11 @@
 
 ## [1.0.0] - 2026-06-17
 ### Added
-- LLM quantization pipeline supporting INT4, INT8, and FP16 precision targets
-- Layer-wise sensitivity analysis to guide mixed-precision quantization decisions
-- ONNX export and TensorRT optimization for edge deployment
-- Latency and memory benchmarking across mobile and embedded hardware profiles
-- KV-cache compression techniques for reduced memory footprint on-device
-- Automated accuracy regression tests comparing quantized vs full-precision outputs
+- MLX-based knowledge distillation pipeline: a frozen Phi-3 Mini 3.8B (INT4) teacher
+  guides training of a from-scratch ~236M-parameter MLX student model
+- INT4 weight quantization of the trained student (`src/optimization/quantize.py`)
+- CoreML export path (MLX → PyTorch mirror → `coremltools`) producing an `.mlpackage`
+  targeting CPU + Neural Engine
+- MMLU and perplexity evaluation utilities to compare student variants
+- Streamlit + Plotly dashboard comparing model size, speed, MMLU, and perplexity
+  across teacher/student/quantized/CoreML variants
