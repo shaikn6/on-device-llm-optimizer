@@ -40,6 +40,8 @@ def main() -> None:
         int4_dir="models/student_int4",
         out_path="models/student.mlpackage",
         compute_units=ex_cfg["compute_units"],
+        group_size=q_cfg["group_size"],
+        bits=q_cfg["bits"],
     )
 
     print("\nExport complete.")
