@@ -68,39 +68,6 @@ and `configs/distill_config.yaml`, not an idealized design.
    held-out perplexity; `mmlu_eval.py` scores MMLU; the Streamlit app renders the
    four-variant comparison.
 
-## Verification status
-
-What's confirmed by running the code, versus by reading it, on Apple Silicon
-(Python 3.12, clean venv):
-
-- **Test suite** — `pytest tests/ -v --cov` passes 63/63 with 96% line coverage
-  (CI enforces `--cov-fail-under=95`). Covers the student model's forward shapes
-  and ~236M parameter count, the distillation loss (`kd_loss`), INT4
-  quantize/dequantize round-tripping, padding-mask correctness in `batch_iter`,
-  and perplexity scoring.
-- **CoreML export weight-loading and architecture match — verified numerically.**
-  `_load_dequantized_state_dict` loads a saved `weights.npz` into the PyTorch
-  mirror (`_TorchStudentModel`) in `src/export/coreml_export.py`. Feeding the
-  same weights into both the MLX `StudentModel` and the PyTorch mirror and
-  comparing logits on identical input gives a max absolute difference of
-  `~1.5e-6` (float32 rounding noise) — the two implementations compute the
-  same function.
-- **ONNX graph stage — reached and completes.** `torch.onnx.export(...,
-  opset_version=17)` on the PyTorch mirror runs to completion (traces, runs
-  decompositions, translates to ONNX) with `torch==2.13`, `onnx==1.22`, and
-  `onnxscript` installed.
-- **Final `.mlpackage` write — not verified end-to-end.** `ct.convert(onnx_path,
-  ...)` fails in this sandbox with `ValueError: Unable to determine the type of
-  the model` — `coremltools==9.0`'s ONNX frontend does not recognize the graph
-  produced by this `torch`/`onnx` combination (coremltools itself warns that
-  torch versions newer than 2.7 are untested). This is a dependency-version
-  mismatch in the sandbox, not a bug in the export logic reached before it.
-  Producing an actual `.mlpackage` and loading it on-device is pending a run
-  with compatible pinned versions (or on a physical Apple Silicon machine
-  outside this sandbox).
-- **Benchmark numbers below — not measured.** See the note under Benchmark
-  targets.
-
 ## Benchmark targets
 
 > **These are design targets, not measured results.** This repo ships the full pipeline
@@ -134,6 +101,39 @@ CoreML export (`src/export/coreml_export.py`, step 3 below) additionally imports
 ```bash
 pip install torch onnx onnxscript
 ```
+
+## Verification status
+
+What's confirmed by running the code, versus by reading it, on Apple Silicon
+(Python 3.12, clean venv):
+
+- **Test suite** — `pytest tests/ -v --cov` passes 63/63 with 96% line coverage
+  (CI enforces `--cov-fail-under=95`). Covers the student model's forward shapes
+  and ~236M parameter count, the distillation loss (`kd_loss`), INT4
+  quantize/dequantize round-tripping, padding-mask correctness in `batch_iter`,
+  and perplexity scoring.
+- **CoreML export weight-loading and architecture match — verified numerically.**
+  `_load_dequantized_state_dict` loads a saved `weights.npz` into the PyTorch
+  mirror (`_TorchStudentModel`) in `src/export/coreml_export.py`. Feeding the
+  same weights into both the MLX `StudentModel` and the PyTorch mirror and
+  comparing logits on identical input gives a max absolute difference of
+  `~1.5e-6` (float32 rounding noise) — the two implementations compute the
+  same function.
+- **ONNX graph stage — reached and completes.** `torch.onnx.export(...,
+  opset_version=17)` on the PyTorch mirror runs to completion (traces, runs
+  decompositions, translates to ONNX) with `torch==2.13`, `onnx==1.22`, and
+  `onnxscript` installed.
+- **Final `.mlpackage` write — not verified end-to-end.** `ct.convert(onnx_path,
+  ...)` fails in this sandbox with `ValueError: Unable to determine the type of
+  the model` — `coremltools==9.0`'s ONNX frontend does not recognize the graph
+  produced by this `torch`/`onnx` combination (coremltools itself warns that
+  torch versions newer than 2.7 are untested). This is a dependency-version
+  mismatch in the sandbox, not a bug in the export logic reached before it.
+  Producing an actual `.mlpackage` and loading it on-device is pending a run
+  with compatible pinned versions (or on a physical Apple Silicon machine
+  outside this sandbox).
+- **Benchmark numbers above are not measured** — see the note under Benchmark
+  targets.
 
 ## Usage
 
