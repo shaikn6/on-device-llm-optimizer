@@ -90,6 +90,18 @@ and `configs/distill_config.yaml`, not an idealized design.
 pip install -e .
 ```
 
+Verified in a clean Python 3.12 venv on Apple Silicon (`python3 -m venv`, then
+`pip install -e .`): resolves and installs cleanly, including `mlx`, `mlx-lm`, and
+`coremltools`.
+
+CoreML export (`src/export/coreml_export.py`, step 3 below) additionally imports
+`torch` and uses `torch.onnx.export`, neither of which is declared in
+`pyproject.toml`. Install them separately before running `scripts/export.py`:
+
+```bash
+pip install torch onnx onnxscript
+```
+
 ## Usage
 
 ```bash
@@ -99,7 +111,7 @@ python scripts/download_data.py
 # 2. Run distillation (~6-10 hours on M-series Mac)
 python scripts/train.py
 
-# 3. Quantize + export to CoreML
+# 3. Quantize + export to CoreML (needs torch/onnx/onnxscript, see Setup)
 python scripts/export.py
 
 # 4. Launch benchmark dashboard
