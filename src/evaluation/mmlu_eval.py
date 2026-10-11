@@ -14,6 +14,7 @@ import mlx.core as mx
 from datasets import load_dataset
 from transformers import PreTrainedTokenizerBase
 
+from src.pins import revision
 from src.model.student import StudentModel
 
 _CHOICES = ["A", "B", "C", "D"]
@@ -72,7 +73,7 @@ def mmlu_accuracy(
     Returns:
         Accuracy as a float in [0, 1]. Multiply by 100 for percentage.
     """
-    ds = load_dataset("cais/mmlu", "all", split="test")
+    ds = load_dataset("cais/mmlu", "all", split="test", revision=revision("cais/mmlu"))
     rng = random.Random(seed)
     indices = rng.sample(range(len(ds)), min(n, len(ds)))
 
