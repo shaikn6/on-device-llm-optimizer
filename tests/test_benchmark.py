@@ -12,6 +12,7 @@ import mlx.utils as mx_utils
 import pytest
 from transformers import AutoTokenizer
 
+from src.pins import revision
 from src.model.config import StudentConfig
 from src.model.student import StudentModel
 from src.optimization.quantize import quantize_int4
@@ -45,7 +46,7 @@ def _greedy_decode(model: StudentModel, token_ids: list[int], steps: int = 10) -
 @pytest.fixture(scope="module")
 def tokenizer():
     """Load the Phi-3 tokenizer once for all benchmark tests."""
-    return AutoTokenizer.from_pretrained(TOKENIZER_NAME, trust_remote_code=True)
+    return AutoTokenizer.from_pretrained(TOKENIZER_NAME, revision=revision(TOKENIZER_NAME), trust_remote_code=True)
 
 
 @pytest.fixture(scope="module")

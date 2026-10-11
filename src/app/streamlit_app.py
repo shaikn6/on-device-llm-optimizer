@@ -18,6 +18,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from transformers import AutoTokenizer
 
+from src.pins import revision
 from src.model.config import StudentConfig
 from src.model.student import StudentModel
 
@@ -47,7 +48,7 @@ _FALLBACK_RESULTS = {
 
 @st.cache_resource
 def load_tokenizer() -> object:
-    return AutoTokenizer.from_pretrained(TEACHER_NAME, trust_remote_code=True)
+    return AutoTokenizer.from_pretrained(TEACHER_NAME, revision=revision(TEACHER_NAME), trust_remote_code=True)
 
 
 @st.cache_resource

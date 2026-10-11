@@ -5,6 +5,7 @@ Uses the Phi-3 tokenizer so student and teacher share the same vocabulary.
 """
 from __future__ import annotations
 
+from src.pins import revision
 import random
 from typing import Iterator
 
@@ -51,8 +52,8 @@ def load_alpaca(
     Returns:
         (train_tokens, val_tokens): Lists of token-id lists, one per example.
     """
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, trust_remote_code=True)
-    ds = load_dataset(ALPACA_DATASET, split="train")
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, revision=revision(tokenizer_name), trust_remote_code=True)
+    ds = load_dataset(ALPACA_DATASET, revision=revision(ALPACA_DATASET), split="train")
 
     rng = random.Random(seed)
     examples = [_format_example(row) for row in ds]
