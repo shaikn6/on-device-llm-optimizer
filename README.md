@@ -49,7 +49,9 @@ and `configs/distill_config.yaml`, not an idealized design.
    soft KL term and a hard cross-entropy term:
    `L = α · KL(softmax(S/T) ‖ softmax(Teacher/T)) · T² + (1−α) · CE(S, hard_labels)`,
    with temperature `T = 4.0` and `α = 0.7` (config-driven). The `T²` factor restores
-   gradient scale after temperature softening — the standard Hinton formulation.
+   gradient scale after temperature softening, as in Hinton et al. Note the KL direction:
+   this implementation computes KL(student ‖ teacher) (reverse KL, mode-seeking), whereas
+   Hinton et al. use KL(teacher ‖ student) (forward KL).
 3. **Student** (`src/model/student.py`, `config.py`). A from-scratch MLX transformer:
    12 layers, hidden dim 1024, 8 heads, SwiGLU gated FFN (4× expansion), LayerNorm,
    learned positional embeddings, and an `lm_head` weight-tied to the token embedding.
@@ -107,8 +109,11 @@ pip install torch onnx onnxscript
 What's confirmed by running the code, versus by reading it, on Apple Silicon
 (Python 3.12, clean venv):
 
-- **Test suite** — `pytest tests/ -v --cov` passes 63/63 with 96% line coverage
-  (CI enforces `--cov-fail-under=95`). Covers the student model's forward shapes
+- **Test suite** — `pytest tests/ -v --cov=src` passes 64/64 with 41% line coverage of
+  `src/`. (A bare `--cov` reports 96%, but that only counts modules the tests import,
+  including the test files themselves; the trainer, dashboard, MMLU eval and CoreML export
+  are not exercised by tests.) CI does not enforce a coverage threshold: MLX does not
+  install on the CI runner, so its test step is non-blocking. Covers the student model's forward shapes
   and ~236M parameter count, the distillation loss (`kd_loss`), INT4
   quantize/dequantize round-tripping, padding-mask correctness in `batch_iter`,
   and perplexity scoring.

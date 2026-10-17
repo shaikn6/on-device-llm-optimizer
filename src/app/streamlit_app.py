@@ -35,6 +35,8 @@ MODEL_DIRS = {
 # Benchmark results file (written by a separate benchmark script or pre-populated)
 RESULTS_PATH = Path("models/benchmark_results.json")
 
+# DESIGN TARGETS, not measured results. Shown only until models/benchmark_results.json
+# (written by a real benchmark run) exists; the dashboard labels them as such.
 _FALLBACK_RESULTS = {
     "Teacher (Phi-3 INT4)": {"size_mb": 2200, "tokens_per_sec": 25, "mmlu": 68.8, "perplexity": 8.2},
     "Student FP32":         {"size_mb": 910,  "tokens_per_sec": 12, "mmlu": 57.0, "perplexity": 12.5},
@@ -89,6 +91,18 @@ def load_results() -> dict:
     return _FALLBACK_RESULTS
 
 
+def results_are_targets() -> bool:
+    """True when load_results() returns the design-target fallback, not measurements."""
+    return not RESULTS_PATH.exists()
+
+
+TARGETS_NOTICE = (
+    "DESIGN TARGETS - NOT MEASURED. No benchmark results found at "
+    f"`{RESULTS_PATH}`; the numbers below are the project's design targets, "
+    "not outputs of a benchmark run."
+)
+
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
@@ -133,6 +147,8 @@ with tab1:
 with tab2:
     st.header("Benchmark Metrics")
     results = load_results()
+    if results_are_targets():
+        st.warning(TARGETS_NOTICE)
     names = list(results.keys())
 
     col_a, col_b = st.columns(2)
@@ -144,7 +160,7 @@ with tab2:
             x=names, y=sizes,
             marker_color=["#e74c3c", "#3498db", "#2ecc71", "#9b59b6"]
         ))
-        fig_size.update_layout(title="Model Size (MB)", yaxis_title="MB", xaxis_tickangle=-20)
+        fig_size.update_layout(title="Model Size (MB)" + (" - design targets" if results_are_targets() else ""), yaxis_title="MB", xaxis_tickangle=-20)
         st.plotly_chart(fig_size, use_container_width=True)
 
         # Tokens / sec bar chart
@@ -153,7 +169,7 @@ with tab2:
             x=names, y=tps_vals,
             marker_color=["#e74c3c", "#3498db", "#2ecc71", "#9b59b6"]
         ))
-        fig_tps.update_layout(title="Tokens / Second", yaxis_title="tok/s", xaxis_tickangle=-20)
+        fig_tps.update_layout(title="Tokens / Second" + (" - design targets" if results_are_targets() else ""), yaxis_title="tok/s", xaxis_tickangle=-20)
         st.plotly_chart(fig_tps, use_container_width=True)
 
     with col_b:
@@ -164,11 +180,11 @@ with tab2:
             line=dict(color="#f39c12", width=3),
             marker=dict(size=10)
         ))
-        fig_mmlu.update_layout(title="MMLU Score (%)", yaxis_title="MMLU %", yaxis_range=[0, 100])
+        fig_mmlu.update_layout(title="MMLU Score (%)" + (" - design targets" if results_are_targets() else ""), yaxis_title="MMLU %", yaxis_range=[0, 100])
         st.plotly_chart(fig_mmlu, use_container_width=True)
 
         # Full metrics table
-        st.subheader("Full Metrics Table")
+        st.subheader("Full Metrics Table (design targets)" if results_are_targets() else "Full Metrics Table")
         rows = []
         for name in names:
             r = results[name]
@@ -224,10 +240,15 @@ Student: Custom 236M Transformer (12L × 1024d × 8h)
     student_mb = results.get("Student INT4", {}).get("size_mb", 120)
     compression = teacher_mb / student_mb if student_mb else 0
 
-    st.header("Resume Bullet (from real benchmark numbers)")
+    verb = "targeting" if results_are_targets() else "achieved"
+    if results_are_targets():
+        st.header("Resume Bullet (from design targets - not yet measured)")
+        st.warning(TARGETS_NOTICE)
+    else:
+        st.header("Resume Bullet (from measured benchmark results)")
     st.success(
         f"Implemented knowledge distillation pipeline on Apple Silicon (MLX) compressing "
-        f"Phi-3 Mini 3.8B → 236M student model; achieved {retention:.0f}% MMLU retention at "
+        f"Phi-3 Mini 3.8B → 236M student model; {verb} {retention:.0f}% MMLU retention at "
         f"{compression:.1f}× size reduction ({teacher_mb} MB → {student_mb} MB INT4) with "
         f"CoreML export targeting iPhone Neural Engine."
     )

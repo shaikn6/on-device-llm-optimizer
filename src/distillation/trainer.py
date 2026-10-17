@@ -79,8 +79,9 @@ class DistillationTrainer:
     def _loss_fn(self, student: StudentModel, tokens: mx.array, mask: mx.array) -> mx.array:
         """Compute KD loss for one batch. Called by mx.value_and_grad."""
         logits_s = student(tokens)                            # [B, S, V]
-        with mx.no_grad():
-            logits_t = self.teacher(tokens)                   # [B, S, V] — frozen
+        # MLX has no no_grad(); grads are taken only w.r.t. the student by
+        # nn.value_and_grad, and stop_gradient makes the teacher a constant target.
+        logits_t = mx.stop_gradient(self.teacher(tokens))     # [B, S, V] — frozen
         labels = tokens[:, 1:]                                # next-token labels
         logits_s = logits_s[:, :-1, :]                       # align
         logits_t = logits_t[:, :-1, :]
