@@ -86,6 +86,25 @@ and `configs/distill_config.yaml`, not an idealized design.
 | Student INT4 | 120 MB | 45 tok/s | ~54% |
 | Student CoreML | 120 MB | 68 tok/s (NE) | ~54% |
 
+## Measured smoke run
+
+The targets above are unmeasured. To show the distillation path actually learns — on the repo's own
+`StudentModel`, `kd_loss` and trainer — `scripts/kd_smoke.py` runs a small, real KD job and writes
+`results/kd_smoke.json`. It is a smoke run, **not** the Phi-3 → 236M target: a 16.8M student
+(4L × 256d × 4h), the open Apache-2.0 teacher `SmolLM2-135M`, 500 steps on Tiny Shakespeare
+(public-domain), contiguous train/val split so no val text is trained on. Held-out perplexity, lower is better:
+
+| Model | Val perplexity |
+|---|---|
+| Teacher (SmolLM2-135M) | 34.8 |
+| Student, random init | 76061 |
+| Student, **KD** (α=0.7, T=4) | **236.0** |
+| Student, CE-only control (α=0) | 350.2 |
+
+The KD student (236) beats the no-teacher CE-only control (350) under the same budget, so the teacher
+signal measurably helps. One seed on Apple Silicon (MLX 0.32.4); reproduce with `python scripts/kd_smoke.py`.
+`tests/test_kd_smoke.py` checks the pieces on tiny tensors with no downloads.
+
 ## Setup
 
 ```bash
