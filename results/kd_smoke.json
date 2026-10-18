@@ -1,0 +1,51 @@
+{
+  "kind": "SMOKE RUN - tiny student, few steps. NOT the Phi-3 -> 236M design-target run.",
+  "teacher": {
+    "model": "HuggingFaceTB/SmolLM2-135M",
+    "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+    "license": "Apache-2.0",
+    "params": 134515008
+  },
+  "dataset": {
+    "name": "Tiny Shakespeare",
+    "url": "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt",
+    "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+    "license": "public-domain text (file from karpathy/char-rnn, MIT)",
+    "train_tokens": 306984,
+    "val_tokens": 34048
+  },
+  "config": {
+    "steps": 500,
+    "batch_size": 8,
+    "seq_len": 128,
+    "lr": 0.001,
+    "temperature": 4.0,
+    "alpha": 0.7,
+    "layers": 4,
+    "hidden_dim": 256,
+    "heads": 4,
+    "seed": 0
+  },
+  "hardware": "arm64 Darwin, mlx 0.32.4",
+  "val_perplexity": {
+    "teacher": 34.799832754802324,
+    "student_before": 76060.96572511934,
+    "student_kd": 236.05026119509094,
+    "student_ce_only_control": 350.1832336233624
+  },
+  "student_params": 16814592,
+  "train_seconds": {
+    "student_kd": 495.0,
+    "student_ce_only_control": 578.5
+  },
+  "train_loss_first_last": {
+    "student_kd": [
+      7.8659,
+      2.7964
+    ],
+    "student_ce_only_control": [
+      11.2923,
+      5.3172
+    ]
+  }
+}
