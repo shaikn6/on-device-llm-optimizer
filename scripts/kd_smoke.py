@@ -1,7 +1,9 @@
 """Small, real KD run: tiny student, small open teacher, measured held-out perplexity.
 
 Usage:
-    python scripts/kd_smoke.py [--steps 300] [--out results/kd_smoke.json]
+    python scripts/kd_smoke.py [--steps 500] [--out results/kd_smoke.json]
+
+The defaults are the configuration of the committed results/kd_smoke.json.
 
 This is a SMOKE RUN, not the Phi-3 -> 236M design run. It writes the measured numbers
 to a JSON file; nothing in it is estimated.
@@ -66,8 +68,8 @@ def n_params(model) -> int:
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--steps", type=int, default=300)
-    p.add_argument("--batch-size", type=int, default=16)
+    p.add_argument("--steps", type=int, default=500)
+    p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--seq-len", type=int, default=128)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--temperature", type=float, default=4.0)

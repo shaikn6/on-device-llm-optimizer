@@ -36,7 +36,7 @@ jobs:
         # Tests that import mlx will be skipped or error; continue-on-error allows the CI
         # job to report a yellow result rather than blocking PRs entirely.
         # Because this step cannot gate the build, no coverage threshold is enforced here.
-        # Measured locally on Apple Silicon: 41% of src/ (--cov=src).
+        # Measured locally on Apple Silicon: 45% of src/ (--cov=src).
         continue-on-error: true
         run: |
           pip install pytest pytest-cov

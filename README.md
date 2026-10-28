@@ -4,7 +4,7 @@
 
 **Knowledge-distill a 3.8B teacher into a ~236M student, INT4-quantize it, and export to CoreML for the iPhone Neural Engine — entirely on Apple Silicon (MLX).**
 
-Phi-3 Mini 3.8B (frozen, INT4 teacher) → custom 236M MLX student → group-wise INT4 →
+Phi-3 Mini 3.8B (frozen teacher) → custom 236M MLX student → group-wise INT4 →
 CoreML `.mlpackage` (CPU + Neural Engine), with a Streamlit dashboard that compares all
 four variants on size, speed, MMLU and perplexity.
 
@@ -15,7 +15,7 @@ four variants on size, speed, MMLU and perplexity.
 ```mermaid
 flowchart TD
     subgraph Teacher
-      T["Phi-3 Mini 3.8B<br/>microsoft/Phi-3-mini-4k-instruct<br/>INT4, frozen"]
+      T["Phi-3 Mini 3.8B<br/>microsoft/Phi-3-mini-4k-instruct<br/>BF16 as loaded, frozen"]
     end
     subgraph Distillation["Knowledge Distillation — src/distillation"]
       D["trainer.py loop<br/>Alpaca 52K · 10k steps · lr 3e-4"]
@@ -43,8 +43,10 @@ and `configs/distill_config.yaml`, not an idealized design.
 
 ## How it works
 
-1. **Teacher (frozen).** Phi-3 Mini 3.8B is loaded INT4 and used only to produce soft
-   logits — it is never updated.
+1. **Teacher (frozen).** Phi-3 Mini 3.8B is used only to produce soft logits — it is
+   never updated. `trainer.py` loads the pinned Hugging Face checkpoint as published
+   (BF16, 7.64 GB of safetensors); the `teacher.quantize: int4` key in the config is not
+   read by any code, so the teacher is not quantized.
 2. **Distillation loss** (`src/distillation/losses.py`). `kd_loss` is a weighted sum of a
    soft KL term and a hard cross-entropy term:
    `L = α · KL(softmax(S/T) ‖ softmax(Teacher/T)) · T² + (1−α) · CE(S, hard_labels)`,
@@ -59,9 +61,10 @@ and `configs/distill_config.yaml`, not an idealized design.
    `tests/test_student_model.py`).
 4. **Training loop** (`src/distillation/trainer.py`). Distills on the Alpaca 52K dataset
    for 10k steps (batch 8, lr 3e-4), checkpointing every 500 steps.
-5. **INT4 quantization** (`src/optimization/quantize.py`). Each 2-D Linear weight whose
-   last dim is divisible by `group_size` (64) is passed through `mx.quantize(bits=4)`,
-   storing 4-bit packed weights plus per-group scales/biases.
+5. **INT4 quantization** (`src/optimization/quantize.py`). Each 2-D weight whose last
+   dim is divisible by `group_size` (64) — the Linear layers and the token and position
+   embeddings — is passed through `mx.quantize(bits=4)`, storing 4-bit packed weights
+   plus per-group FP32 scales/biases.
 6. **CoreML export** (`src/export/coreml_export.py`). MLX has no direct CoreML path, so the
    weights are bridged into an equivalent Torch module, traced, and converted with
    `ct.convert(..., compute_units=CPU_AND_NE, minimum_deployment_target=iOS17)` to a
@@ -72,23 +75,43 @@ and `configs/distill_config.yaml`, not an idealized design.
 
 ## Benchmark targets
 
-> **These are design targets, not measured results.** This repo ships the full pipeline
-> but no trained checkpoints (`checkpoints/` and `models/` are empty placeholders), so the
-> numbers below — and the values backing the dashboard charts in `src/app/streamlit_app.py`
-> — are the project's goals for a completed distillation run on M-series hardware. Run the
-> pipeline end-to-end to produce your own figures. The architecture facts (236M params,
-> 12L × 1024d × 8h, INT4 group size 64) are real and test-verified.
+> **Tokens/sec and MMLU are design targets, not measured results.** This repo ships the
+> full pipeline but no trained checkpoints (`checkpoints/` and `models/` are empty
+> placeholders), so those two columns — and the matching values backing the dashboard
+> charts in `src/app/streamlit_app.py` — are the project's goals for a completed
+> distillation run on M-series hardware. Run the pipeline end-to-end to produce your own
+> figures. The architecture facts (236M params, 12L × 1024d × 8h, INT4 group size 64) are
+> real and test-verified.
+>
+> **Sizes are measured.** File size is fixed by the architecture, not by training, so it
+> can be measured without a trained checkpoint (see the note below the table).
 
-| Variant | Size | Tokens/sec | MMLU |
+| Variant | Size (measured) | Tokens/sec (target) | MMLU (target) |
 |---------|------|-----------|------|
-| Teacher (Phi-3 INT4) | 2.2 GB | 25 tok/s | 68.8% |
-| Student FP32 | 910 MB | 12 tok/s | ~57% |
-| Student INT4 | 120 MB | 45 tok/s | ~54% |
-| Student CoreML | 120 MB | 68 tok/s (NE) | ~54% |
+| Teacher (Phi-3 Mini, as loaded) | 7.64 GB (BF16) | 25 tok/s | 68.8% |
+| Student FP32 | 945.3 MB | 12 tok/s | ~57% |
+| Student INT4 | 147.9 MB | 45 tok/s | ~54% |
+| Student CoreML | not measured | 68 tok/s (NE) | ~54% |
+
+How the sizes were measured (MB = 10⁶ bytes):
+
+- **Student FP32 / INT4** — build `StudentModel(StudentConfig())` (236,308,480 params,
+  random init), save its parameters to `weights.npz` the way `trainer.py` does
+  (`mx.savez` of `tree_flatten(model.parameters())`), then run the repo's own
+  `quantize_int4(..., group_size=64)` on it and take the `weights.npz` file sizes:
+  945,266,380 bytes FP32 and 147,942,532 bytes INT4. The INT4 file is 118.1 MB of packed
+  4-bit weights + 29.5 MB of FP32 per-group scales/biases + 0.2 MB of unquantized
+  vectors, so even the packed weights alone leave no room for the earlier 120 MB target
+  at group size 64.
+- **Teacher** — sum of the `.safetensors` files of `microsoft/Phi-3-mini-4k-instruct` at
+  the revision pinned in `src/pins.py`, from the Hugging Face API. That is what
+  `trainer.py` loads; it does not quantize the teacher.
+- **CoreML** — not measured: the `.mlpackage` write is not verified end-to-end (see
+  Verification status).
 
 ## Measured smoke run
 
-The targets above are unmeasured. To show the distillation path actually learns — on the repo's own
+The speed and MMLU targets above are unmeasured. To show the distillation path actually learns — on the repo's own
 `StudentModel`, `kd_loss` and trainer — `scripts/kd_smoke.py` runs a small, real KD job and writes
 `results/kd_smoke.json`. It is a smoke run, **not** the Phi-3 → 236M target: a 16.8M student
 (4L × 256d × 4h), the open Apache-2.0 teacher `SmolLM2-135M`, 500 steps on Tiny Shakespeare
@@ -102,18 +125,23 @@ The targets above are unmeasured. To show the distillation path actually learns 
 | Student, CE-only control (α=0) | 350.2 |
 
 The KD student (236) beats the no-teacher CE-only control (350) under the same budget, so the teacher
-signal measurably helps. One seed on Apple Silicon (MLX 0.32.4); reproduce with `python scripts/kd_smoke.py`.
+signal measurably helps. One seed (0) on Apple Silicon (MLX 0.32.4). Reproduce with
+`python scripts/kd_smoke.py`; its defaults are the committed configuration
+(`--steps 500 --batch-size 8 --seq-len 128 --lr 1e-3 --seed 0`, as recorded in `results/kd_smoke.json`).
+It needs about 20 minutes on an M-series Mac: the committed run spent 495 s and 579 s training
+the two students, plus teacher scoring.
 `tests/test_kd_smoke.py` checks the pieces on tiny tensors with no downloads.
 
 ## Setup
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
 ```
 
-Verified in a clean Python 3.12 venv on Apple Silicon (`python3 -m venv`, then
-`pip install -e .`): resolves and installs cleanly, including `mlx`, `mlx-lm`, and
-`coremltools`.
+The `dev` extra adds the test and lint tools (`pytest`, `pytest-cov`, `flake8`); plain
+`pip install -e .` is enough to run the pipeline. Verified in a clean Python 3.12 venv on
+Apple Silicon (`python3 -m venv`, then `pip install -e ".[dev]"`): resolves and installs
+cleanly, including `mlx`, `mlx-lm`, and `coremltools`.
 
 CoreML export (`src/export/coreml_export.py`, step 3 below) additionally imports
 `torch` and uses `torch.onnx.export`, neither of which is declared in
@@ -128,8 +156,8 @@ pip install torch onnx onnxscript
 What's confirmed by running the code, versus by reading it, on Apple Silicon
 (Python 3.12, clean venv):
 
-- **Test suite** — `pytest tests/ -v --cov=src` passes 64/64 with 41% line coverage of
-  `src/`. (A bare `--cov` reports 96%, but that only counts modules the tests import,
+- **Test suite** — `pytest tests/ -v --cov=src` (after `pip install -e ".[dev]"`) passes 67/67
+  with 45% line coverage of `src/` (`TOTAL 614 336 45%`). (A bare `--cov` reports 91%, but that only counts modules the tests import,
   including the test files themselves; the trainer, dashboard, MMLU eval and CoreML export
   are not exercised by tests.) CI does not enforce a coverage threshold: MLX does not
   install on the CI runner, so its test step is non-blocking. Covers the student model's forward shapes
@@ -156,8 +184,8 @@ What's confirmed by running the code, versus by reading it, on Apple Silicon
   Producing an actual `.mlpackage` and loading it on-device is pending a run
   with compatible pinned versions (or on a physical Apple Silicon machine
   outside this sandbox).
-- **Benchmark numbers above are not measured** — see the note under Benchmark
-  targets.
+- **Speed and MMLU numbers above are not measured** — see the note under Benchmark
+  targets. The sizes in that table are measured.
 
 ## Usage
 
