@@ -43,9 +43,10 @@ class DistillationTrainer:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Load teacher (MLX INT4, frozen)
+        # Load teacher (frozen). mlx_load keeps the checkpoint's own dtype (BF16 for
+        # Phi-3 Mini); cfg["teacher"]["quantize"] is not applied.
         teacher_name = cfg["teacher"]["model"]
-        print(f"Loading teacher: {teacher_name} (INT4) …")
+        print(f"Loading teacher: {teacher_name} …")
         self.teacher, self.tokenizer = mlx_load(
             teacher_name, tokenizer_config={"trust_remote_code": True}
         )

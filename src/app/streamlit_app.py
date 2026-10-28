@@ -27,7 +27,7 @@ from src.model.student import StudentModel
 # ---------------------------------------------------------------------------
 TEACHER_NAME = "microsoft/Phi-3-mini-4k-instruct"
 MODEL_DIRS = {
-    "Teacher (Phi-3 INT4)": None,          # loaded via mlx_lm
+    "Teacher (Phi-3 Mini)": None,          # loaded via mlx_lm
     "Student FP32": "models/student_fp32",
     "Student INT4": "models/student_int4",
     "Student CoreML": "models/student.mlpackage",
@@ -35,13 +35,15 @@ MODEL_DIRS = {
 # Benchmark results file (written by a separate benchmark script or pre-populated)
 RESULTS_PATH = Path("models/benchmark_results.json")
 
-# DESIGN TARGETS, not measured results. Shown only until models/benchmark_results.json
-# (written by a real benchmark run) exists; the dashboard labels them as such.
+# Shown only until models/benchmark_results.json (written by a real benchmark run) exists.
+# tokens_per_sec, mmlu and perplexity are DESIGN TARGETS, not measured; the dashboard labels
+# them as such. size_mb is measured (fixed by architecture, see README "Benchmark targets");
+# CoreML size is None because the .mlpackage write is not verified.
 _FALLBACK_RESULTS = {
-    "Teacher (Phi-3 INT4)": {"size_mb": 2200, "tokens_per_sec": 25, "mmlu": 68.8, "perplexity": 8.2},
-    "Student FP32":         {"size_mb": 910,  "tokens_per_sec": 12, "mmlu": 57.0, "perplexity": 12.5},
-    "Student INT4":         {"size_mb": 120,  "tokens_per_sec": 45, "mmlu": 54.0, "perplexity": 13.1},
-    "Student CoreML":       {"size_mb": 120,  "tokens_per_sec": 68, "mmlu": 54.0, "perplexity": 13.1},
+    "Teacher (Phi-3 Mini)": {"size_mb": 7642,  "tokens_per_sec": 25, "mmlu": 68.8, "perplexity": 8.2},
+    "Student FP32":         {"size_mb": 945.3, "tokens_per_sec": 12, "mmlu": 57.0, "perplexity": 12.5},
+    "Student INT4":         {"size_mb": 147.9, "tokens_per_sec": 45, "mmlu": 54.0, "perplexity": 13.1},
+    "Student CoreML":       {"size_mb": None,  "tokens_per_sec": 68, "mmlu": 54.0, "perplexity": 13.1},
 }
 
 # ---------------------------------------------------------------------------
@@ -98,8 +100,8 @@ def results_are_targets() -> bool:
 
 TARGETS_NOTICE = (
     "DESIGN TARGETS - NOT MEASURED. No benchmark results found at "
-    f"`{RESULTS_PATH}`; the numbers below are the project's design targets, "
-    "not outputs of a benchmark run."
+    f"`{RESULTS_PATH}`; the speed, MMLU and perplexity numbers below are the project's "
+    "design targets, not outputs of a benchmark run. Sizes are measured file sizes."
 )
 
 
@@ -137,7 +139,7 @@ with tab1:
 
         # Teacher and CoreML require mlx_lm / CoreML runtime — show placeholder
         with cols[0]:
-            st.subheader("Teacher (Phi-3 INT4)")
+            st.subheader("Teacher (Phi-3 Mini)")
             st.info("Run via: `mlx_lm.generate --model microsoft/Phi-3-mini-4k-instruct`")
         with cols[3]:
             st.subheader("Student CoreML")
@@ -160,7 +162,7 @@ with tab2:
             x=names, y=sizes,
             marker_color=["#e74c3c", "#3498db", "#2ecc71", "#9b59b6"]
         ))
-        fig_size.update_layout(title="Model Size (MB)" + (" - design targets" if results_are_targets() else ""), yaxis_title="MB", xaxis_tickangle=-20)
+        fig_size.update_layout(title="Model Size (MB)", yaxis_title="MB", xaxis_tickangle=-20)
         st.plotly_chart(fig_size, use_container_width=True)
 
         # Tokens / sec bar chart
@@ -201,7 +203,7 @@ with tab2:
 with tab3:
     st.header("Pipeline Architecture")
     st.code("""
-Teacher: Phi-3 Mini 3.8B (INT4, frozen, ~2.2 GB)
+Teacher: Phi-3 Mini 3.8B (frozen, BF16 as loaded, ~7.6 GB)
          │  soft labels (T=4)
          ▼
 Knowledge Distillation (MLX, Alpaca 52K)
@@ -212,7 +214,7 @@ Checkpoint every 500 steps
 Student: Custom 236M Transformer (12L × 1024d × 8h)
          │              │
     INT4 Quant      CoreML Export
-    (~120 MB)       (.mlpackage, CPU+NE)
+    (~148 MB)       (.mlpackage, CPU+NE)
          │              │
          └──────┬───────┘
                 ▼
@@ -224,7 +226,7 @@ Student: Custom 236M Transformer (12L × 1024d × 8h)
         ("1. Identify the constraint", "iPhone: 4–6 GB RAM, no cloud, offline-only"),
         ("2. Choose the right model family", "Sub-1B models; Phi-3 Mini as teacher for quality"),
         ("3. Compress via knowledge distillation", "Phi-3 3.8B → custom 236M student, Alpaca 52K"),
-        ("4. Post-training quantization", "MLX INT4, group_size=64 → ~120 MB"),
+        ("4. Post-training quantization", "MLX INT4, group_size=64 → ~148 MB"),
         ("5. Hardware-specific export", "coremltools → .mlpackage, CPU+NE compute units"),
         ("6. Benchmark all variants", "Size, tokens/sec, MMLU, perplexity side-by-side"),
         ("7. Ship with fallback strategy", "CoreML → INT4 fallback if NE unavailable"),
@@ -233,11 +235,11 @@ Student: Custom 236M Transformer (12L × 1024d × 8h)
         st.markdown(f"**{label}:** {detail}")
 
     results = load_results()
-    teacher_mmlu = results.get("Teacher (Phi-3 INT4)", {}).get("mmlu", 68.8)
+    teacher_mmlu = results.get("Teacher (Phi-3 Mini)", {}).get("mmlu", 68.8)
     student_int4_mmlu = results.get("Student INT4", {}).get("mmlu", 54.0)
     retention = student_int4_mmlu / teacher_mmlu * 100 if teacher_mmlu else 0
-    teacher_mb = results.get("Teacher (Phi-3 INT4)", {}).get("size_mb", 2200)
-    student_mb = results.get("Student INT4", {}).get("size_mb", 120)
+    teacher_mb = results.get("Teacher (Phi-3 Mini)", {}).get("size_mb", 7642)
+    student_mb = results.get("Student INT4", {}).get("size_mb", 147.9)
     compression = teacher_mb / student_mb if student_mb else 0
 
     verb = "targeting" if results_are_targets() else "achieved"
