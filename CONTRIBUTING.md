@@ -1,47 +1,34 @@
 # Contributing
 
-Thank you for your interest in contributing!
+Thanks for taking the time to contribute.
 
-## Getting Started
+## Development setup
 
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/REPO_NAME.git`
-3. Create a feature branch: `git checkout -b feat/your-feature`
-4. Install dependencies (see README.md)
-5. Make your changes
-6. Run tests: `pytest` or `npm test` depending on the stack
-7. Commit with conventional commits: `git commit -m "feat: add X"`
-8. Push and open a Pull Request
+MLX, `mlx-lm` and `coremltools` need Apple Silicon. On other machines the MLX tests are skipped or fail.
 
-## Commit Message Format
-
-```
-<type>: <short description>
-
-Types: feat | fix | docs | refactor | test | chore | perf | ci
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest tests/ -v --cov=src --cov-report=term-missing
+# lint: run the exact flake8 command from the Lint step in .github/workflows/ci.yml
 ```
 
-## Code Standards
+CI (`.github/workflows/ci.yml`) runs on Linux without MLX, so its test step cannot gate a PR. Run the tests
+on Apple Silicon before opening one, and say in the PR that you did.
 
-- Python: follow PEP 8, use type hints, run `ruff check`
-- TypeScript: strict mode, no `any`, run `tsc --noEmit`
-- All new features need tests (target 80%+ coverage)
-- No hardcoded secrets — use environment variables
+## Ground rules
 
-## Pull Request Checklist
+- **One logical change per PR.** Keep diffs reviewable.
+- **Tests are not optional.** New behaviour needs a test; bug fixes need a test that fails before the fix.
+- **Measured vs target.** The README separates design targets from measured results. A number moves into
+  "measured" only with the command and hardware that produced it.
+- **No secrets in code.** Tokens and keys come from the environment.
 
-- [ ] Tests pass locally
-- [ ] No secrets or credentials in code
-- [ ] README updated if behaviour changed
-- [ ] One focused change per PR
+## Commit messages
 
-## Reporting Issues
+Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
-Open a GitHub Issue with:
-- What you expected vs what happened
-- Steps to reproduce
-- Environment (OS, Python/Node version)
+## Reporting bugs / proposing features
 
-## License
-
-By contributing you agree your work is released under this project's [MIT License](LICENSE).
+Use the issue templates. For anything security-related, follow [SECURITY.md](SECURITY.md) instead of opening
+a public issue.
