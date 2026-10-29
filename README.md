@@ -1,12 +1,20 @@
-# On-Device LLM Optimizer
+# on-device-llm-optimizer
 
-![Build](https://img.shields.io/github/actions/workflow/status/shaikn6/on-device-llm-optimizer/ci.yml?style=flat-square&label=build) ![Stars](https://img.shields.io/github/stars/shaikn6/on-device-llm-optimizer?style=flat-square) ![Last Commit](https://img.shields.io/github/last-commit/shaikn6/on-device-llm-optimizer?style=flat-square) ![License](https://img.shields.io/github/license/shaikn6/on-device-llm-optimizer?style=flat-square) ![Top Language](https://img.shields.io/github/languages/top/shaikn6/on-device-llm-optimizer?style=flat-square) ![Issues](https://img.shields.io/github/issues/shaikn6/on-device-llm-optimizer?style=flat-square) ![Repo Size](https://img.shields.io/github/repo-size/shaikn6/on-device-llm-optimizer?style=flat-square)
+[![CI](https://github.com/shaikn6/on-device-llm-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/shaikn6/on-device-llm-optimizer/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 
-**Knowledge-distill a 3.8B teacher into a ~236M student, INT4-quantize it, and export to CoreML for the iPhone Neural Engine — entirely on Apple Silicon (MLX).**
+**A pipeline to knowledge-distill a 3.8B teacher into a ~236M student, INT4-quantize it, and export it toward CoreML for the iPhone Neural Engine, on Apple Silicon (MLX).**
 
 Phi-3 Mini 3.8B (frozen teacher) → custom 236M MLX student → group-wise INT4 →
 CoreML `.mlpackage` (CPU + Neural Engine), with a Streamlit dashboard that compares all
 four variants on size, speed, MMLU and perplexity.
+
+The full Phi-3 → 236M distillation has not been run in this repo, so its speed and MMLU
+figures are design targets ([Benchmark targets](#benchmark-targets)), and the final
+`.mlpackage` write is not yet verified ([Verification status](#verification-status)). What is
+measured: model file sizes, and a small distillation smoke run where the distilled student
+beats a no-teacher control on held-out perplexity (236.0 vs 350.2; [Measured smoke run](#measured-smoke-run)).
 
 **Tech stack:** MLX (training + INT4 quantization), PyTorch + ONNX + coremltools (CoreML export bridge), Hugging Face datasets (Alpaca 52K), Streamlit + Plotly (dashboard), pytest.
 
@@ -132,7 +140,7 @@ It needs about 20 minutes on an M-series Mac: the committed run spent 495 s and 
 the two students, plus teacher scoring.
 `tests/test_kd_smoke.py` checks the pieces on tiny tensors with no downloads.
 
-## Setup
+## Quickstart
 
 ```bash
 pip install -e ".[dev]"
@@ -196,7 +204,7 @@ python scripts/download_data.py
 # 2. Run distillation (~6-10 hours on M-series Mac)
 python scripts/train.py
 
-# 3. Quantize + export to CoreML (needs torch/onnx/onnxscript, see Setup)
+# 3. Quantize + export to CoreML (needs torch/onnx/onnxscript, see Quickstart)
 python scripts/export.py
 
 # 4. Launch benchmark dashboard
