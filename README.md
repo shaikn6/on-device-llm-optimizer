@@ -1,5 +1,7 @@
 # on-device-llm-optimizer
 
+> **Shrink Phi-3 Mini from 3.8B to a ~236M on-device model: distill, INT4-quantize, and ship it to CoreML.**
+
 [![CI](https://github.com/shaikn6/on-device-llm-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/shaikn6/on-device-llm-optimizer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
