@@ -166,14 +166,15 @@ pip install torch onnx onnxscript
 What's confirmed by running the code, versus by reading it, on Apple Silicon
 (Python 3.12, clean venv):
 
-- **Test suite** — `pytest tests/ -v --cov=src` (after `pip install -e ".[dev]"`) passes 67/67
+- **Test suite** — `pytest tests/ -v --cov=src` (after `pip install -e ".[dev]"`) passes 74/74
   with 45% line coverage of `src/` (`TOTAL 614 336 45%`). (A bare `--cov` reports 91%, but that only counts modules the tests import,
   including the test files themselves; the trainer, dashboard, MMLU eval and CoreML export
-  are not exercised by tests.) CI does not enforce a coverage threshold: MLX does not
-  install on the CI runner, so its test step is non-blocking. Covers the student model's forward shapes
-  and ~236M parameter count, the distillation loss (`kd_loss`), INT4
-  quantize/dequantize round-tripping, padding-mask correctness in `batch_iter`,
-  and perplexity scoring.
+  are not exercised by tests.) CI runs the real suite as a blocking gate: the MLX-free
+  config/pins tests on `ubuntu-latest`, and the full suite on a `macos-latest` (Apple
+  Silicon) runner where MLX installs. No coverage threshold is enforced. Covers the
+  student model's forward shapes and ~236M parameter count, the distillation loss
+  (`kd_loss`), INT4 quantize/dequantize round-tripping, padding-mask correctness in
+  `batch_iter`, perplexity scoring, and `StudentConfig`/revision-pin validation.
 - **CoreML export weight-loading and architecture match — verified numerically.**
   `_load_dequantized_state_dict` loads a saved `weights.npz` into the PyTorch
   mirror (`_TorchStudentModel`) in `src/export/coreml_export.py`. Feeding the
@@ -221,6 +222,14 @@ pytest tests/ -v
 
 Covers the student model (param count, forward shapes), distillation losses, INT4
 quantization, perplexity, and benchmark wiring.
+
+The MLX-dependent tests need Apple Silicon. `tests/test_config.py` and `tests/test_pins.py`
+import no MLX and reach no network, so they run anywhere with only `pytest` installed —
+this is what the cross-platform CI job gates on:
+
+```bash
+pytest tests/test_config.py tests/test_pins.py -v
+```
 
 ## Environment Variables
 
