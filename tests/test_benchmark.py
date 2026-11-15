@@ -46,7 +46,10 @@ def _greedy_decode(model: StudentModel, token_ids: list[int], steps: int = 10) -
 @pytest.fixture(scope="module")
 def tokenizer():
     """Load the Phi-3 tokenizer once for all benchmark tests."""
-    return AutoTokenizer.from_pretrained(TOKENIZER_NAME, revision=revision(TOKENIZER_NAME), trust_remote_code=True)
+    try:
+        return AutoTokenizer.from_pretrained(TOKENIZER_NAME, revision=revision(TOKENIZER_NAME), trust_remote_code=True)
+    except OSError as error:
+        pytest.skip(f"{TOKENIZER_NAME} tokenizer not available offline: {error}")
 
 
 @pytest.fixture(scope="module")
