@@ -13,12 +13,13 @@ CoreML `.mlpackage` (CPU + Neural Engine), with a Streamlit dashboard that compa
 four variants on size, speed, MMLU and perplexity.
 
 The full Phi-3 → 236M distillation has not been run in this repo, so its speed and MMLU
-figures are design targets ([Benchmark targets](#benchmark-targets)), and the final
-`.mlpackage` write is not yet verified ([Verification status](#verification-status)). What is
-measured: model file sizes, and a small distillation smoke run where the distilled student
-beats a no-teacher control on held-out perplexity (236.0 vs 350.2; [Measured smoke run](#measured-smoke-run)).
+figures are design targets ([Benchmark targets](#benchmark-targets)). What is measured: model
+file sizes, a CoreML export of the full-size architecture that writes a `.mlpackage` and runs
+on a Mac (not yet on an iPhone; [Verification status](#verification-status)), and a small
+distillation smoke run where the distilled student beats a no-teacher control on held-out
+perplexity (236.0 vs 350.2; [Measured smoke run](#measured-smoke-run)).
 
-**Tech stack:** MLX (training + INT4 quantization), PyTorch + ONNX + coremltools (CoreML export bridge), Hugging Face datasets (Alpaca 52K), Streamlit + Plotly (dashboard), pytest.
+**Tech stack:** MLX (training + INT4 quantization), PyTorch TorchScript + coremltools (CoreML export bridge), Hugging Face datasets (Alpaca 52K), Streamlit + Plotly (dashboard), pytest.
 
 ## Architecture
 
@@ -48,7 +49,7 @@ flowchart TD
     C --> V
 ```
 
-Every box maps to a real module — the diagram is generated from the actual source tree
+Every box maps to a real module — the diagram is drawn from the actual source tree
 and `configs/distill_config.yaml`, not an idealized design.
 
 ## How it works
@@ -76,9 +77,10 @@ and `configs/distill_config.yaml`, not an idealized design.
    embeddings — is passed through `mx.quantize(bits=4)`, storing 4-bit packed weights
    plus per-group FP32 scales/biases.
 6. **CoreML export** (`src/export/coreml_export.py`). MLX has no direct CoreML path, so the
-   weights are bridged into an equivalent Torch module, traced, and converted with
-   `ct.convert(..., compute_units=CPU_AND_NE, minimum_deployment_target=iOS17)` to a
-   `.mlpackage` that the Neural Engine can run.
+   INT4 weights are dequantized into an equivalent Torch module, traced with TorchScript, and
+   converted with `ct.convert(..., compute_units=CPU_AND_NE, minimum_deployment_target=iOS17)`
+   to a `.mlpackage` targeting the Neural Engine. The package stores FP16 weights; it does not
+   keep the 4-bit packing.
 7. **Evaluation + dashboard** (`src/evaluation`, `src/app`). `perplexity.py` computes
    held-out perplexity; `mmlu_eval.py` scores MMLU; the Streamlit app renders the
    four-variant comparison.
@@ -101,7 +103,7 @@ and `configs/distill_config.yaml`, not an idealized design.
 | Teacher (Phi-3 Mini, as loaded) | 7.64 GB (BF16) | 25 tok/s | 68.8% |
 | Student FP32 | 945.3 MB | 12 tok/s | ~57% |
 | Student INT4 | 147.9 MB | 45 tok/s | ~54% |
-| Student CoreML | not measured | 68 tok/s (NE) | ~54% |
+| Student CoreML | 470.1 MB (FP16) | 68 tok/s (NE) | ~54% |
 
 How the sizes were measured (MB = 10⁶ bytes):
 
@@ -116,8 +118,10 @@ How the sizes were measured (MB = 10⁶ bytes):
 - **Teacher** — sum of the `.safetensors` files of `microsoft/Phi-3-mini-4k-instruct` at
   the revision pinned in `src/pins.py`, from the Hugging Face API. That is what
   `trainer.py` loads; it does not quantize the teacher.
-- **CoreML** — not measured: the `.mlpackage` write is not verified end-to-end (see
-  Verification status).
+- **CoreML** — `export_coreml()` run on that INT4 file (default 512-token trace, `CPU_AND_NE`)
+  writes a `.mlpackage` of 470,079,295 bytes. CoreML stores the dequantized weights as FP16,
+  so the package is about 3x the INT4 file; 4-bit compression inside CoreML (coremltools
+  weight palettization or linear quantization) is not implemented.
 
 ## Measured smoke run
 
@@ -153,28 +157,30 @@ The `dev` extra adds the test and lint tools (`pytest`, `pytest-cov`, `flake8`);
 Apple Silicon (`python3 -m venv`, then `pip install -e ".[dev]"`): resolves and installs
 cleanly, including `mlx`, `mlx-lm`, and `coremltools`.
 
-CoreML export (`src/export/coreml_export.py`, step 3 below) additionally imports
-`torch` and uses `torch.onnx.export`, neither of which is declared in
-`pyproject.toml`. Install them separately before running `scripts/export.py`:
+CoreML export (`src/export/coreml_export.py`, step 3 below) also needs `torch`, which the
+`dev` extra already includes. With a plain install, add it before running `scripts/export.py`:
 
 ```bash
-pip install torch onnx onnxscript
+pip install -e ".[export]"
 ```
 
 ## Verification status
 
-What's confirmed by running the code, versus by reading it, on Apple Silicon
-(Python 3.12, clean venv):
+What's confirmed by running the code, versus by reading it, on an Apple M2 Pro
+(Python 3.12, clean venv, torch 2.15, coremltools 9.0):
 
-- **Test suite** — `pytest tests/ -v --cov=src` (after `pip install -e ".[dev]"`) passes 74/74
-  with 45% line coverage of `src/` (`TOTAL 614 336 45%`). (A bare `--cov` reports 91%, but that only counts modules the tests import,
-  including the test files themselves; the trainer, dashboard, MMLU eval and CoreML export
+- **Test suite** — `pytest tests/ -v --cov=src` (after `pip install -e ".[dev]"`) passes 75/75
+  with 63% line coverage of `src/` (`TOTAL 609 224 63%`). (A bare `--cov` reports 92%, but that only counts modules the tests import,
+  including the test files themselves; the trainer, dashboard and MMLU eval
   are not exercised by tests.) CI runs the real suite as a blocking gate: the MLX-free
   config/pins tests on `ubuntu-latest`, and the full suite on a `macos-latest` (Apple
   Silicon) runner where MLX installs. No coverage threshold is enforced. Covers the
   student model's forward shapes and ~236M parameter count, the distillation loss
   (`kd_loss`), INT4 quantize/dequantize round-tripping, padding-mask correctness in
-  `batch_iter`, perplexity scoring, and `StudentConfig`/revision-pin validation.
+  `batch_iter`, perplexity scoring, `StudentConfig`/revision-pin validation, and the CoreML
+  export (`tests/test_coreml_export.py`: a tiny model is quantized, exported, loaded with
+  coremltools, and on macOS its predicted logits must have the right shape and agree with the
+  PyTorch mirror's argmax on at least 90% of positions).
 - **CoreML export weight-loading and architecture match — verified numerically.**
   `_load_dequantized_state_dict` loads a saved `weights.npz` into the PyTorch
   mirror (`_TorchStudentModel`) in `src/export/coreml_export.py`. Feeding the
@@ -182,19 +188,13 @@ What's confirmed by running the code, versus by reading it, on Apple Silicon
   comparing logits on identical input gives a max absolute difference of
   `~1.5e-6` (float32 rounding noise) — the two implementations compute the
   same function.
-- **ONNX graph stage — reached and completes.** `torch.onnx.export(...,
-  opset_version=17)` on the PyTorch mirror runs to completion (traces, runs
-  decompositions, translates to ONNX) with `torch==2.13`, `onnx==1.22`, and
-  `onnxscript` installed.
-- **Final `.mlpackage` write — not verified end-to-end.** `ct.convert(onnx_path,
-  ...)` fails in this sandbox with `ValueError: Unable to determine the type of
-  the model` — `coremltools==9.0`'s ONNX frontend does not recognize the graph
-  produced by this `torch`/`onnx` combination (coremltools itself warns that
-  torch versions newer than 2.7 are untested). This is a dependency-version
-  mismatch in the sandbox, not a bug in the export logic reached before it.
-  Producing an actual `.mlpackage` and loading it on-device is pending a run
-  with compatible pinned versions (or on a physical Apple Silicon machine
-  outside this sandbox).
+- **`.mlpackage` write — verified on a Mac.** The export used to go through ONNX, but
+  coremltools 6 and later have no ONNX frontend, so `ct.convert(onnx_path, ...)` failed with
+  `ValueError: Unable to determine the type of the model`. It now traces the PyTorch mirror
+  with TorchScript and converts that. On the full-size architecture (random weights) it writes
+  a 470.1 MB package, and `predict()` on a Mac returns logits of the right shape. coremltools
+  warns that torch versions newer than 2.7 are untested; this run used torch 2.15.
+- **Not verified:** loading the package on an iPhone, Neural Engine placement, and speed.
 - **Speed and MMLU numbers above are not measured** — see the note under Benchmark
   targets. The sizes in that table are measured.
 
@@ -204,10 +204,10 @@ What's confirmed by running the code, versus by reading it, on Apple Silicon
 # 1. Download Alpaca 52K dataset
 python scripts/download_data.py
 
-# 2. Run distillation (~6-10 hours on M-series Mac)
+# 2. Run distillation (not yet run end to end in this repo; expect several hours on an M-series Mac)
 python scripts/train.py
 
-# 3. Quantize + export to CoreML (needs torch/onnx/onnxscript, see Quickstart)
+# 3. Quantize + export to CoreML (needs torch, see Quickstart)
 python scripts/export.py
 
 # 4. Launch benchmark dashboard
@@ -221,7 +221,7 @@ pytest tests/ -v
 ```
 
 Covers the student model (param count, forward shapes), distillation losses, INT4
-quantization, perplexity, and benchmark wiring.
+quantization, perplexity, CoreML export, and benchmark wiring.
 
 The MLX-dependent tests need Apple Silicon. `tests/test_config.py` and `tests/test_pins.py`
 import no MLX and reach no network, so they run anywhere with only `pytest` installed —
@@ -244,11 +244,26 @@ cp .env.example .env
 | `HF_TOKEN` | HuggingFace token (optional, only for gated models) |
 | `DISTILL_CONFIG` | Override config path (default: `configs/distill_config.yaml`) |
 
+## Limitations
+
+- **The headline pipeline is unmeasured.** No Phi-3 → 236M distillation has been run, so there
+  is no trained student; tokens/sec and MMLU in the table are design targets, and the dashboard
+  labels them as targets.
+- **The only measured learning result is a smoke run**: a 16.8M student, a 135M teacher, 500 steps
+  on Tiny Shakespeare, one seed. It shows the KD path learns, not that the 236M student will reach
+  the MMLU target.
+- **CoreML** is verified only as far as writing the package and running `predict()` on a Mac. It
+  stores FP16 weights (470.1 MB, not 4-bit), and it has not been run on an iPhone or profiled on
+  the Neural Engine.
+- **Reverse KL.** `kd_loss` uses KL(student ‖ teacher), not the forward KL of Hinton et al.; the
+  smoke run is the only evidence for this choice.
+- **Apple Silicon only** for anything that imports MLX; CI runs the full suite on a macOS runner.
+
 ## Requirements
 
 - macOS 13+ (Ventura) with Apple Silicon (M1/M2/M3/M4)
 - Python 3.11+
-- 16 GB RAM minimum (32 GB recommended for full distillation run)
+- 16 GB RAM minimum (32 GB recommended for full distillation run; estimates, since the full run has not been done)
 
 ## License
 
