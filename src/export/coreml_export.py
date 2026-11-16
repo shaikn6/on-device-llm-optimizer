@@ -4,17 +4,12 @@ The export pipeline:
   1. Load INT4 MLX weights, dequantize them back to FP32, and load them into a
      PyTorch mirror of StudentModel (a temporary numpy bridge — coremltools
      works with PyTorch or TF graphs, not MLX directly).
-  2. Use ct.convert() with NeuralNetwork or ML Program backend.
+  2. Trace the PyTorch mirror with TorchScript and convert it with ct.convert().
   3. Set compute_units=CPU_AND_NE to activate the Neural Engine.
-
-Note: coremltools requires either a TorchScript trace or an ONNX graph.
-We use the ONNX path for maximum compatibility:
-  StudentModel (MLX) → onnx via numpy weights → ct.convert(onnx_model)
 """
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import coremltools as ct
@@ -22,7 +17,6 @@ import mlx.core as mx
 import numpy as np
 import torch
 import torch.nn as tnn
-import torch.onnx
 
 
 class _TorchAttention(tnn.Module):
@@ -86,7 +80,7 @@ class _TorchTransformerBlock(tnn.Module):
 
 
 class _TorchStudentModel(tnn.Module):
-    """PyTorch mirror of StudentModel (src/model/student.py) for ONNX tracing.
+    """PyTorch mirror of StudentModel (src/model/student.py) for TorchScript tracing.
 
     Architecture and parameter names match the MLX original exactly (pre-norm
     blocks, causal attention, SwiGLU FFN, weight-tied lm_head), so a trained
@@ -169,7 +163,7 @@ def export_coreml(
         int4_dir: Directory with INT4 weights.npz and config.json.
         out_path: Destination path for the .mlpackage (must end with .mlpackage).
         compute_units: CoreML compute units string ("CPU_AND_NE", "ALL", "CPU_ONLY").
-        max_seq_len: Sequence length for the fixed-shape ONNX trace.
+        max_seq_len: Sequence length for the fixed-shape TorchScript trace.
         group_size: Quantization group size used by quantize_int4() on this model.
         bits: Quantization bit-width used by quantize_int4() on this model.
     """
@@ -184,7 +178,7 @@ def export_coreml(
     num_heads = cfg["num_heads"]
     cfg_max_seq_len = cfg.get("max_seq_len", max_seq_len)
 
-    print("Building PyTorch model for ONNX trace …")
+    print("Building PyTorch model for TorchScript trace …")
     torch_model = _TorchStudentModel(vocab_size, hidden_dim, num_layers, num_heads, cfg_max_seq_len)
 
     print(f"Loading trained weights from {int4_dir / 'weights.npz'} …")
@@ -194,17 +188,7 @@ def export_coreml(
 
     # Trace with a dummy input
     dummy = torch.zeros((1, max_seq_len), dtype=torch.long)
-    onnx_path = str(out_path.with_suffix(".onnx"))
-    print(f"Exporting ONNX → {onnx_path} …")
-    torch.onnx.export(
-        torch_model,
-        dummy,
-        onnx_path,
-        input_names=["input_ids"],
-        output_names=["logits"],
-        dynamic_axes={"input_ids": {0: "batch", 1: "seq"}, "logits": {0: "batch", 1: "seq"}},
-        opset_version=17,
-    )
+    traced = torch.jit.trace(torch_model, dummy)
 
     _cu_map = {
         "CPU_AND_NE": ct.ComputeUnit.CPU_AND_NE,
@@ -215,12 +199,10 @@ def export_coreml(
 
     print(f"Converting to CoreML ({compute_units}) …")
     mlmodel = ct.convert(
-        onnx_path,
+        traced,
         inputs=[ct.TensorType(name="input_ids", shape=(1, max_seq_len), dtype=np.int32)],
         compute_units=cu,
         minimum_deployment_target=ct.target.iOS17,
     )
     mlmodel.save(str(out_path))
-    # Clean up intermediate ONNX
-    os.remove(onnx_path)
     print(f"CoreML package saved → {out_path}")

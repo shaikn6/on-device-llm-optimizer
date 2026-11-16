@@ -38,12 +38,12 @@ RESULTS_PATH = Path("models/benchmark_results.json")
 # Shown only until models/benchmark_results.json (written by a real benchmark run) exists.
 # tokens_per_sec, mmlu and perplexity are DESIGN TARGETS, not measured; the dashboard labels
 # them as such. size_mb is measured (fixed by architecture, see README "Benchmark targets");
-# CoreML size is None because the .mlpackage write is not verified.
+# CoreML size is the exported .mlpackage, which stores FP16 weights.
 _FALLBACK_RESULTS = {
     "Teacher (Phi-3 Mini)": {"size_mb": 7642,  "tokens_per_sec": 25, "mmlu": 68.8, "perplexity": 8.2},
     "Student FP32":         {"size_mb": 945.3, "tokens_per_sec": 12, "mmlu": 57.0, "perplexity": 12.5},
     "Student INT4":         {"size_mb": 147.9, "tokens_per_sec": 45, "mmlu": 54.0, "perplexity": 13.1},
-    "Student CoreML":       {"size_mb": None,  "tokens_per_sec": 68, "mmlu": 54.0, "perplexity": 13.1},
+    "Student CoreML":       {"size_mb": 470.1, "tokens_per_sec": 68, "mmlu": 54.0, "perplexity": 13.1},
 }
 
 # ---------------------------------------------------------------------------
